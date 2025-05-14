@@ -112,6 +112,7 @@ function bbwscip_set_split_hook() {
 		add_filter( 'woocommerce_cart_shipping_packages', 'bbwscip_split_packages_at_cart' );
 	}
 	if ( 'thankyou' == $when_split ) {
+		add_action( 'woocommerce_thankyou', 'bbwscip_split_packages_after_checkout', 9999 );
 	}
 	if ( 'vieworder' == $when_split ) {
 	}
@@ -119,6 +120,8 @@ function bbwscip_set_split_hook() {
 
 // Split the order into packages when view the cart.
 function bbwscip_split_packages_at_cart( $packages ) {
+	$split_by = get_option( bbwscip_settings_option_name_split_criteria(), 'class' );
+
 	$destination = $packages[0]['destination'];
 	$user = $packages[0]['user'];
 	$applied_coupons = $packages[0]['applied_coupons'];
@@ -138,6 +141,55 @@ function bbwscip_split_packages_at_cart( $packages ) {
 	}
 
 	return $packages;
+}
+
+function bbloomer_split_order_after_checkout( $order_id ) {
+	$order = wc_get_order( $order_id );
+	if ( ! $order || $order->get_meta( '_order_split' ) ) return;
+
+	$split_by = get_option( bbwscip_settings_option_name_split_criteria(), 'class' );
+	$items_by_shipping_class = array();
+
+	foreach ( $order->get_items() as $item_id => $item ) {
+		$product = $item->get_product();
+		$class_id = $product->get_shipping_class_id();
+		$items_by_shipping_class[$class_id][$item_id] = $item;
+	}
+
+	if ( count( $items_by_shipping_class ) > 1 ) {
+		foreach ( array_slice( $items_by_shipping_class, 1 ) as $class_id => $items ) {
+			$new_order = wc_create_order();
+			$new_order->set_address( $order->get_address( 'billing' ), 'billing' );
+			if ( $order->needs_shipping_address() ) $new_order->set_address( $order->get_address( 'shipping' ) ?? $order->get_address( 'billing' ), 'shipping' );
+
+			foreach ( $items as $item_id => $item ) {
+				$new_item = new WC_Order_Item_Product();
+				$new_item->set_product( $item->get_product() );
+				$new_item->set_quantity( $item->get_quantity() );
+				$new_item->set_total( $item->get_total() );
+				$new_item->set_subtotal( $item->get_subtotal() );
+				$new_item->set_tax_class( $item->get_tax_class() );
+				$new_item->set_taxes( $item->get_taxes() );
+
+				foreach ( $item->get_meta_data() as $meta ) {
+					$new_item->add_meta_data( $meta->key, $meta->value, true );
+				}
+
+				$new_order->add_item( $new_item );
+				$order->remove_item( $item_id );
+			}
+
+			$new_order->add_order_note( 'Split from order ' . $order_id );
+			$new_order->calculate_totals();
+			$new_order->set_payment_method( $order->get_payment_method() );
+			$new_order->set_payment_method_title( $order->get_payment_method_title() );
+			$new_order->update_status( $order->get_status() );
+
+			$order->calculate_totals();
+			$order->update_meta_data( '_order_split', true );
+			$order->save();
+		}
+	}
 }
 
 // Add Business Bloomer tab to Woo settings if it doesnt exist yet
