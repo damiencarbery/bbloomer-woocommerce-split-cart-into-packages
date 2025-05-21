@@ -2,14 +2,14 @@
 
 /*
  * Plugin Name: Business Bloomer WooCommerce Split Cart Into Packages
- * Description: Split a package by shipping class, category, tag, weight, dimensions, attribute, tax class or price.
+ * Description: Split a cart (aka package) by shipping class, category, tag, weight, dimensions, attribute, tax class or price.
  * Plugin URI: https://www.businessbloomer.com/shop/plugins/woocommerce-split-cart-into-packages/
  * Update URI: https://www.businessbloomer.com/shop/plugins/woocommerce-split-cart-into-packages/
  * Author: Business Bloomer
  * Author URI: https://www.businessbloomer.com
  * Text Domain: bbloomer-woocommerce-split-cart-into-packages
  * Requires Plugins: woocommerce
- * Version: 0.1.20250428
+ * Version: 0.1.20250521
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -72,31 +72,36 @@ add_filter( 'update_plugins_www.businessbloomer.com', function( $update, array $
     ];
 }, 9999, 4 );
 
+/*
 // Return the wp_options option names - used in a number of functions.
 function bbwscip_settings_option_name_when_split() {
 	return 'bb_wscip_ws';
 }
-
+*/
 function bbwscip_settings_option_name_split_criteria() {
 	return 'bb_wscip_sc';
 }
 
+/*
 // Return the possible options for when to split the order.
 function bbwscip_when_split_options() {
 	return array( 'cart'      => __( 'Split the order when viewing cart (default)', 'bbloomer-woocommerce-split-cart-into-packages' ),
-				  'thankyou'  => __( 'Split after order placed (in Thank Youu page)', 'bbloomer-woocommerce-split-cart-into-packages' ),
-				  'vieworder' => __( 'Split when viewing order', 'bbloomer-woocommerce-split-cart-into-packages' ), );
+				  'thankyou'  => __( 'Split after order placed (in Thank You page)', 'bbloomer-woocommerce-split-cart-into-packages' ),
+				  //'vieworder' => __( 'Split when viewing order', 'bbloomer-woocommerce-split-cart-into-packages' ),
+				);
 }
+*/
 // Return the possible options for what to use to split an order.
 function bbwscip_split_criteria_options() {
 	return array( 'class'  => __( 'Shipping class (default)', 'bbloomer-woocommerce-split-cart-into-packages' ),
 				  'category'=> __( 'Product category', 'bbloomer-woocommerce-split-cart-into-packages' ),
 				  'tag'=> __( 'Product tag', 'bbloomer-woocommerce-split-cart-into-packages' ),
-				  'weight'=> __( 'Product weight', 'bbloomer-woocommerce-split-cart-into-packages' ),
-				  'dimensions'=> __( 'Product dimensions', 'bbloomer-woocommerce-split-cart-into-packages' ),
+				  //'weight'=> __( 'Product weight', 'bbloomer-woocommerce-split-cart-into-packages' ),
+				  //'dimensions'=> __( 'Product dimensions', 'bbloomer-woocommerce-split-cart-into-packages' ),
 				  'attribute'=> __( 'Product attribute', 'bbloomer-woocommerce-split-cart-into-packages' ),
 				  'tax_class'=> __( 'Tax class', 'bbloomer-woocommerce-split-cart-into-packages' ),
-				  'price'=> __( 'Product price', 'bbloomer-woocommerce-split-cart-into-packages' ), );
+				  //'price'=> __( 'Product price', 'bbloomer-woocommerce-split-cart-into-packages' ),
+				);
 }
 // Return the possible options for whether to enable Javascript.
 function bbwscip_enable_js_options() {
@@ -106,44 +111,135 @@ function bbwscip_enable_js_options() {
 
 add_action( 'woocommerce_init', 'bbwscip_set_split_hook' );
 function bbwscip_set_split_hook() {
-	$when_split = get_option( bbwscip_settings_option_name_when_split(), 'class' );
-
-	if ( 'cart' == $when_split ) {
+	// Allow add-ons disable cart split in favour of their own timing e.g. add_filter( 'bbwscip_split_in_cart', '__return_false' );
+	if ( apply_filters( 'bbwscip_split_in_cart', true ) ) {
 		add_filter( 'woocommerce_cart_shipping_packages', 'bbwscip_split_packages_at_cart' );
-	}
-	if ( 'thankyou' == $when_split ) {
-		add_action( 'woocommerce_thankyou', 'bbwscip_split_packages_after_checkout', 9999 );
-	}
-	if ( 'vieworder' == $when_split ) {
 	}
 }
 
 // Split the order into packages when view the cart.
 function bbwscip_split_packages_at_cart( $packages ) {
 	$split_by = get_option( bbwscip_settings_option_name_split_criteria(), 'class' );
+error_log( 'Split by: ' . $split_by );
 
 	$destination = $packages[0]['destination'];
 	$user = $packages[0]['user'];
 	$applied_coupons = $packages[0]['applied_coupons'];
+// ToDo: Would it be safer to create a new array and return it if the cart is split.
+// If the cart is not split then can return original $packages array.
 	$packages = array();
+	
+	$all_attributes = array( 0 => 'none' );  // Store all product attributes (as $packages needs numeric keys).
 
-	foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
-		$key = $cart_item['data']->get_shipping_class_id();
-		$packages[ $key ]['contents'][ $cart_item_key ] = $cart_item;
+	// Change package name to include the category, tag or shipping class name.
+	// This is not run for 'attribute' as the string for the attribute cannot be retrieved.
+	if ( in_array( $split_by, array( 'çlass', 'category', 'tag' ) ) ) {
+		add_filter( 'woocommerce_shipping_package_name', 'bbwscip_package_name', 10, 3 );
 	}
 
-	foreach ( $packages as $index => $package ) {
-		$total = array_sum( wp_list_pluck( $packages[ $index ]['contents'], 'line_total' ) );
-		$packages[ $index ]['destination'] = $destination;
-		$packages[ $index ]['user'] = $user;
-		$packages[ $index ]['applied_coupons'] = $applied_coupons;
-		$packages[ $index ]['contents_cost'] = $total;
+	$cart_split = false;
+	foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
+		if ( 'class' == $split_by ) {
+			$key = $cart_item['data']->get_shipping_class_id();
+			$packages[ $key ]['contents'][ $cart_item_key ] = $cart_item;
+			$cart_split = true;
+		}
+		if ( 'category' == $split_by ) {
+			$cats = $cart_item['data']->get_category_ids();
+			$packages[ $cats[0] ]['contents'][ $cart_item_key ] = $cart_item;
+			$cart_split = true;
+		}
+		if ( 'tag' == $split_by ) {
+			$tags = $cart_item['data']->get_tag_ids();
+			// Handle when the product does not have any tags.
+			if ( empty( $tags ) ) {
+				$tags[0] = '0';
+			}
+			$packages[ $tags[0] ]['contents'][ $cart_item_key ] = $cart_item;
+			$cart_split = true;
+		}
+		if ( 'attribute' == $split_by ) {
+			$attributes = $cart_item['data']->get_attributes();
+			$first_attribute = null;
+			// Handle when the product does not have any attributes.
+			if ( empty( $attributes ) ) {
+				$first_attribute = 0;
+			}
+			else {
+				foreach ( $attributes as $att_slug => $att_name ) {
+					// If the attribute is in $all_attributes then get the index for use with $packages.
+					// Otherwise append the attribute to the end of $all_attributes and get that new index.
+					$key = array_search( $att_slug, $all_attributes );
+					if ( $key ) {
+						$first_attribute = $key;
+					}
+					else {
+						$all_attributes[] = $att_slug;
+						$first_attribute = count( $all_attributes ) - 1; // Get key of last element in array.
+					}
+//error_log( sprintf( '$att_slug: %s; $att_name: %s', $att_slug, $att_name ) );
+					break;
+				}
+				
+			}
+//error_log( '$first_attribute: ' . $first_attribute );
+			$packages[ $first_attribute ]['contents'][ $cart_item_key ] = $cart_item;
+			$cart_split = true;
+//error_log( sprintf( 'Attributes: (%s): %s', $cart_item['data']->get_name(), var_export( $cart_item['data']->get_attributes(), true ) ) );
+		}
+
+//$attributes = $cart_item['data']->get_attributes();
+//$tax_class = $cart_item['data']->get_tax_class();
+//$tags = $cart_item['data']->get_tag_ids();
+	}
+
+	if ( $cart_split ) {
+		foreach ( $packages as $index => $package ) {
+			$total = array_sum( wp_list_pluck( $packages[ $index ]['contents'], 'line_total' ) );
+			$packages[ $index ]['destination'] = $destination;
+			$packages[ $index ]['user'] = $user;
+			$packages[ $index ]['applied_coupons'] = $applied_coupons;
+			$packages[ $index ]['contents_cost'] = $total;
+		}
 	}
 
 	return $packages;
 }
 
-function bbloomer_split_order_after_checkout( $order_id ) {
+// Change package name to include the shipping class or product category name.
+function bbwscip_package_name( $package_name, $i, $package ) {
+	$split_by = get_option( bbwscip_settings_option_name_split_criteria(), 'class' );
+error_log( '(Package name filter) Split by: ' . $split_by );
+error_log( sprintf( '$i: %d, $package_name: %s', $i, $package_name ) );
+
+	if ( 'class' == $split_by ) {
+		$wc_shipping = WC_Shipping::instance();
+		foreach ( $wc_shipping->get_shipping_classes() as $class ) {
+			if ( $i == $class->term_id ) {
+				return sprintf( 'Shipping (%s)', $class->name );
+			}
+		}
+	}
+	if ( 'category' == $split_by  ) {
+		$cat = get_term_by( 'id', $i, 'product_cat' );
+		return sprintf( 'Shipping (%s)', $cat->name );
+	}
+	if ( 'tag' == $split_by  ) {
+		$tag = get_term_by( 'id', $i, 'product_tag' );
+//error_log( sprintf( '$i: %d, $tag: %s', $i, var_export( $tag, true ) ) );
+		if ( $tag ) {
+			return sprintf( 'Shipping (%s)', $tag->name );
+		}
+		else {
+			return $package_name;
+		}
+	}
+
+
+	return $package_name;
+}
+/*
+function bbwscip_split_packages_after_checkout( $order_id ) {
 	$order = wc_get_order( $order_id );
 	if ( ! $order || $order->get_meta( '_order_split' ) ) return;
 
@@ -179,7 +275,7 @@ function bbloomer_split_order_after_checkout( $order_id ) {
 				$order->remove_item( $item_id );
 			}
 
-			$new_order->add_order_note( 'Split from order ' . $order_id );
+			$new_order->add_order_note( sprintf( 'Split from order <a href="%s">%d</a>.', $order->get_edit_order_url(), $order_id ) );
 			$new_order->calculate_totals();
 			$new_order->set_payment_method( $order->get_payment_method() );
 			$new_order->set_payment_method_title( $order->get_payment_method_title() );
@@ -191,7 +287,7 @@ function bbloomer_split_order_after_checkout( $order_id ) {
 		}
 	}
 }
-
+*/
 // Add Business Bloomer tab to Woo settings if it doesnt exist yet
 add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 	if ( ! class_exists( 'WC_Settings_BB' ) ) {
@@ -247,9 +343,9 @@ add_filter('woocommerce_get_settings_bb', function( $settings, $current_section 
 			'content' => bbwscip_custom_settings_start(),
 		],
 		['type' => 'title'],
-		[
-			'title' => __( 'When split package?', 'bbloomer-woocommerce-split-cart-into-packages' ),
-			'desc' => __( 'Choose when to split the package.', 'bbloomer-woocommerce-split-cart-into-packages' ),
+/*		[
+			'title' => __( 'When split cart?', 'bbloomer-woocommerce-split-cart-into-packages' ),
+			'desc' => __( 'Choose when to split the cart into multiple carts (and orders).', 'bbloomer-woocommerce-split-cart-into-packages' ),
 			'type' => 'select',
 			'id' => bbwscip_settings_option_name_when_split(),
 			'class' => 'wc-enhanced-select',
@@ -257,9 +353,10 @@ add_filter('woocommerce_get_settings_bb', function( $settings, $current_section 
 			'options' => bbwscip_when_split_options(),
 			'autoload' => false,
 		],
+*/
 		[
 			'title'    => 'Split criteria',
-			'desc'     => __( 'Choose what criteria to use to split the order into packages', 'bbloomer-woocommerce-split-cart-into-packages' ),
+			'desc'     => __( 'Choose what criteria to use to split the cart into multiple carts.', 'bbloomer-woocommerce-split-cart-into-packages' ),
 			'type'     => 'select',
 			'id'       => bbwscip_settings_option_name_split_criteria(),
 			'class'    => 'wc-enhanced-select',
