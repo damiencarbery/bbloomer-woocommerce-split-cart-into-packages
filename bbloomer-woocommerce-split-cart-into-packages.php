@@ -120,7 +120,7 @@ function bbwscip_set_split_hook() {
 // Split the order into packages when view the cart.
 function bbwscip_split_packages_at_cart( $packages ) {
 	$split_by = get_option( bbwscip_settings_option_name_split_criteria(), 'class' );
-error_log( 'Split by: ' . $split_by );
+//error_log( 'Split by: ' . $split_by );
 
 	$destination = $packages[0]['destination'];
 	$user = $packages[0]['user'];
@@ -133,7 +133,7 @@ error_log( 'Split by: ' . $split_by );
 
 	// Change package name to include the category, tag or shipping class name.
 	// This is not run for 'attribute' as the string for the attribute cannot be retrieved.
-	if ( in_array( $split_by, array( 'çlass', 'category', 'tag' ) ) ) {
+	if ( in_array( $split_by, array( 'class', 'category', 'tag' ) ) ) {
 		add_filter( 'woocommerce_shipping_package_name', 'bbwscip_package_name', 10, 3 );
 	}
 
@@ -146,6 +146,11 @@ error_log( 'Split by: ' . $split_by );
 		}
 		if ( 'category' == $split_by ) {
 			$cats = $cart_item['data']->get_category_ids();
+			if ( empty( $cats ) ) {
+				$cats[0] = 0;  // Need a numeric value for $packages[].
+			}
+//error_log( sprintf( '%s: $cats[0]: %s', $cart_item['data']->get_name(), var_export( $cats[0], true ) ) );
+//error_log( '$cats[0]: ' . var_export( $cats[0], true ) );
 			$packages[ $cats[0] ]['contents'][ $cart_item_key ] = $cart_item;
 			$cart_split = true;
 		}
@@ -153,7 +158,7 @@ error_log( 'Split by: ' . $split_by );
 			$tags = $cart_item['data']->get_tag_ids();
 			// Handle when the product does not have any tags.
 			if ( empty( $tags ) ) {
-				$tags[0] = '0';
+				$tags[0] = 0;  // Need a numeric value for $packages[].
 			}
 			$packages[ $tags[0] ]['contents'][ $cart_item_key ] = $cart_item;
 			$cart_split = true;
@@ -163,7 +168,7 @@ error_log( 'Split by: ' . $split_by );
 			$first_attribute = null;
 			// Handle when the product does not have any attributes.
 			if ( empty( $attributes ) ) {
-				$first_attribute = 0;
+				$first_attribute = 0;  // Need a numeric value for $packages[].
 			}
 			else {
 				foreach ( $attributes as $att_slug => $att_name ) {
@@ -209,8 +214,8 @@ error_log( 'Split by: ' . $split_by );
 // Change package name to include the shipping class or product category name.
 function bbwscip_package_name( $package_name, $i, $package ) {
 	$split_by = get_option( bbwscip_settings_option_name_split_criteria(), 'class' );
-error_log( '(Package name filter) Split by: ' . $split_by );
-error_log( sprintf( '$i: %d, $package_name: %s', $i, $package_name ) );
+//error_log( '(Package name filter) Split by: ' . $split_by );
+//error_log( sprintf( '$i: %d, $package_name: %s', $i, $package_name ) );
 
 	if ( 'class' == $split_by ) {
 		$wc_shipping = WC_Shipping::instance();
