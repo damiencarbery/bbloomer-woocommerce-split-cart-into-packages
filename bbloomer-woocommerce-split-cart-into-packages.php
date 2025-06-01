@@ -2,32 +2,32 @@
 
 /*
  * Plugin Name: Business Bloomer WooCommerce Split Cart Into Packages
- * Description: Split a cart (aka package) by shipping class, category, tag, weight, dimensions, attribute, tax class or price.
+ * Description: Let customers choose different shipping methods at checkout by automatically splitting the cart into "packages" based on shipping class, category, weight, and more.
  * Plugin URI: https://www.businessbloomer.com/shop/plugins/woocommerce-split-cart-into-packages/
  * Update URI: https://www.businessbloomer.com/shop/plugins/woocommerce-split-cart-into-packages/
  * Author: Business Bloomer
  * Author URI: https://www.businessbloomer.com
  * Text Domain: bbloomer-woocommerce-split-cart-into-packages
  * Requires Plugins: woocommerce
- * Version: 0.1.20250526
+ * Version: 0.2.20250601
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'BBWSCIP', 'https://www.businessbloomer.com/wp-json/bb/v1/downloads?product_id=XXXXXX' ); // BBloomer Read Product ID
+define( 'BBWCSCIP', 'https://www.businessbloomer.com/wp-json/bb/v1/downloads?product_id=252335' ); // BBloomer Read Product ID
 
-add_filter( 'plugin_row_meta', 'bbwscip_hide_view_details', 9999, 4 );
+add_filter( 'plugin_row_meta', 'bbwcscip_hide_view_details', 9999, 4 );
 
-function bbwscip_hide_view_details( $plugin_meta, $plugin_file, $plugin_data, $status ) {
+function bbwcscip_hide_view_details( $plugin_meta, $plugin_file, $plugin_data, $status ) {
 	if ( isset( $plugin_data['TextDomain'] ) && $plugin_data['TextDomain'] == plugin_basename( __DIR__ ) ) unset( $plugin_meta[2] );
 	return $plugin_meta;
 }
 
-add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'bbwscip_action_links', 9999, 4 );
+add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'bbwcscip_action_links', 9999, 4 );
 
-function bbwscip_action_links( $links, $plugin_file, $plugin_data, $context ) {
+function bbwcscip_action_links( $links, $plugin_file, $plugin_data, $context ) {
 	$plugin_links = array(
-		'<a href="' . admin_url( 'admin.php?page=wc-settings&tab=bb&section=bbwscip' ) . '">' . __( 'Settings', 'woocommerce' ) . '</a>',
+		'<a href="' . admin_url( 'admin.php?page=wc-settings&tab=bb&section=bbwcscip' ) . '">' . __( 'Settings', 'woocommerce' ) . '</a>',
 		'<a href="' . $plugin_data['PluginURI'] . '#tab-docs" target="_blank">' . __( 'Docs', 'woocommerce' ) . '</a>',
 		'<a href="https://www.businessbloomer.com/contact-rodolfo/?title=' . rawurlencode( $plugin_data['Name'] ) . rawurlencode( ' ' ) . $plugin_data['Version'] . '#plugin" target="_blank">' . __( 'Get Support', 'woocommerce' ) . '</a>',
 		'<a href="' . $plugin_data['PluginURI'] . '#tab-reviews" target="_blank">' . __( 'Add a review', 'woocommerce' ) . '</a>',
@@ -35,10 +35,10 @@ function bbwscip_action_links( $links, $plugin_file, $plugin_data, $context ) {
 	return array_merge( $plugin_links, $links );
 }
 
-function bbwscip_plugin_view_version_details( $res, $action, $args ) {
+function bbwcscip_plugin_view_version_details( $res, $action, $args ) {
 	if ( 'plugin_information' !== $action ) return $res;
 	if ( $args->slug !== plugin_basename( __DIR__ ) ) return $res;
-	$response = wp_remote_get( BBWSCIP, array(  'headers' => array( 'Accept' => 'application/json' ) ) );
+	$response = wp_remote_get( BBWCSCIP, array(  'headers' => array( 'Accept' => 'application/json' ) ) );
 	if ( ( ! is_wp_error( $response ) ) && ( 200 === wp_remote_retrieve_response_code( $response ) ) ) {
 		$download = json_decode( wp_remote_retrieve_body( $response ), true );
 	} else return $res;
@@ -59,7 +59,7 @@ function bbwscip_plugin_view_version_details( $res, $action, $args ) {
 add_filter( 'update_plugins_www.businessbloomer.com', function( $update, array $plugin_data, string $plugin_file, $locales ) {    
     if ( $plugin_file !== plugin_basename( __DIR__ ) . '/' . plugin_basename( __DIR__ ) . '.php' ) return $update;
 	if ( ! empty( $update ) ) return $update;
-    $response = wp_remote_get( BBWSCIP, array(  'headers' => array( 'Accept' => 'application/json' ) ) );    
+    $response = wp_remote_get( BBWCSCIP, array(  'headers' => array( 'Accept' => 'application/json' ) ) );    
     if ( ( ! is_wp_error( $response ) ) && ( 200 === wp_remote_retrieve_response_code( $response ) ) ) {        
         $download = json_decode( wp_remote_retrieve_body( $response ), true );    
     } else return $update;      
@@ -73,16 +73,16 @@ add_filter( 'update_plugins_www.businessbloomer.com', function( $update, array $
 }, 9999, 4 );
 
 // Return the wp_options option names - used in a number of functions.
-function bbwscip_settings_option_name_when_split() {
+function bbwcscip_settings_option_name_when_split() {
 	return 'bb_wscip_ws';
 }
-function bbwscip_settings_option_name_split_criteria() {
+function bbwcscip_settings_option_name_split_criteria() {
 	return 'bb_wscip_sc';
 }
 
 // Return the possible options for when to split the order.
-function bbwscip_when_split_options() {
-	return apply_filters( 'bbwscip_when_split_options',
+function bbwcscip_when_split_options() {
+	return apply_filters( 'bbwcscip_when_split_options',
 				array(	'cart'      => __( 'Split the order when viewing cart (default)', 'bbloomer-woocommerce-split-cart-into-packages' ),
 					//	'thankyou'  => __( 'Split after order placed (in Thank You page)', 'bbloomer-woocommerce-split-cart-into-packages' ),
 					//	'vieworder' => __( 'Split when viewing order', 'bbloomer-woocommerce-split-cart-into-packages' ),
@@ -90,8 +90,8 @@ function bbwscip_when_split_options() {
 			);
 }
 // Return the possible options for what to use to split an order.
-function bbwscip_split_criteria_options() {
-	return apply_filters( 'bbwscip_split_criteria_options',
+function bbwcscip_split_criteria_options() {
+	return apply_filters( 'bbwcscip_split_criteria_options',
 				array( 'class'  => __( 'Shipping class (default)', 'bbloomer-woocommerce-split-cart-into-packages' ),
 				  'category'=> __( 'Product category', 'bbloomer-woocommerce-split-cart-into-packages' ),
 				  'tag'=> __( 'Product tag', 'bbloomer-woocommerce-split-cart-into-packages' ),
@@ -104,17 +104,17 @@ function bbwscip_split_criteria_options() {
 				);
 }
 
-add_action( 'woocommerce_init', 'bbwscip_set_split_hook' );
-function bbwscip_set_split_hook() {
-	// Allow add-ons disable cart split in favour of their own timing e.g. add_filter( 'bbwscip_split_in_cart', '__return_false' );
-	if ( 'cart' == get_option( bbwscip_settings_option_name_when_split(), 'cart' ) ) {
-		add_filter( 'woocommerce_cart_shipping_packages', 'bbwscip_split_packages_at_cart' );
+add_action( 'woocommerce_init', 'bbwcscip_set_split_hook' );
+function bbwcscip_set_split_hook() {
+	// Allow add-ons disable cart split in favour of their own timing e.g. add_filter( 'bbwcscip_split_in_cart', '__return_false' );
+	if ( 'cart' == get_option( bbwcscip_settings_option_name_when_split(), 'cart' ) ) {
+		add_filter( 'woocommerce_cart_shipping_packages', 'bbwcscip_split_packages_at_cart' );
 	}
 }
 
 // Split the order into packages when view the cart.
-function bbwscip_split_packages_at_cart( $packages ) {
-	$split_by = get_option( bbwscip_settings_option_name_split_criteria(), 'class' );
+function bbwcscip_split_packages_at_cart( $packages ) {
+	$split_by = get_option( bbwcscip_settings_option_name_split_criteria(), 'class' );
 //error_log( 'DEBUG: Split by: ' . $split_by );
 
 	$destination = $packages[0]['destination'];
@@ -129,7 +129,7 @@ function bbwscip_split_packages_at_cart( $packages ) {
 	// Change package name to include the category, tag or shipping class name.
 	// This is not run for 'attribute' as the string for the attribute cannot be retrieved.
 	if ( in_array( $split_by, array( 'class', 'category', 'tag' ) ) ) {
-		add_filter( 'woocommerce_shipping_package_name', 'bbwscip_package_name', 10, 3 );
+		add_filter( 'woocommerce_shipping_package_name', 'bbwcscip_package_name', 10, 3 );
 	}
 
 	$cart_split = false;
@@ -204,8 +204,8 @@ function bbwscip_split_packages_at_cart( $packages ) {
 }
 
 // Change package name to include the shipping class or product category name.
-function bbwscip_package_name( $package_name, $i, $package ) {
-	$split_by = get_option( bbwscip_settings_option_name_split_criteria(), 'class' );
+function bbwcscip_package_name( $package_name, $i, $package ) {
+	$split_by = get_option( bbwcscip_settings_option_name_split_criteria(), 'class' );
 //error_log( 'DEBUG: (Package name filter) Split by: ' . $split_by );
 //error_log( sprintf( 'DEBUG: $i: %d, $package_name: %s', $i, $package_name ) );
 
@@ -268,7 +268,7 @@ add_filter( 'woocommerce_get_settings_pages', function( $settings ) {
 add_action( 'woocommerce_settings_bb', function() {
 	if ( ! empty( $_GET[ 'section' ] ) ) return;
 	$plugin_data = get_plugin_data( WP_PLUGIN_DIR . '/' . plugin_basename( __FILE__ ) );
-	$quick_links = bbwscip_action_links( array(), '', $plugin_data, '' );
+	$quick_links = bbwcscip_action_links( array(), '', $plugin_data, '' );
 	echo '<p><b>&bull; ' . substr( $plugin_data['Name'], 16 ) . '</b> ';
 	echo $plugin_data['Description'];
 	echo ' Quick links: ' . implode( ' - ', $quick_links ) . '</p>';
@@ -277,28 +277,28 @@ add_action( 'woocommerce_settings_bb', function() {
 // Create subtab for this plugin under Business Bloomer tab
 add_filter( 'woocommerce_get_sections_bb', function( $sections ) {
 	$plugin_data = get_plugin_data( WP_PLUGIN_DIR . '/' . plugin_basename( __FILE__ ) );
-	$sections['bbwscip'] = substr( $plugin_data['Name'], 16 );
+	$sections['bbwcscip'] = substr( $plugin_data['Name'], 16 );
 	return $sections;
 });
 
 // Plugin settings under Business Bloomer tab
 add_filter('woocommerce_get_settings_bb', function( $settings, $current_section ) {
-	if ( $current_section !== 'bbwscip' ) return $settings;
+	if ( $current_section !== 'bbwcscip' ) return $settings;
 	$new_settings = [
 		[
-			'type' => 'bbwscip_html_wrapper',
-			'id' => 'bbwscip_custom_settings_page_start',
-			'content' => bbwscip_custom_settings_start(),
+			'type' => 'bbwcscip_html_wrapper',
+			'id' => 'bbwcscip_custom_settings_page_start',
+			'content' => bbwcscip_custom_settings_start(),
 		],
 		['type' => 'title'],
 		[
 			'title' => __( 'When split cart?', 'bbloomer-woocommerce-split-cart-into-packages' ),
 			'desc' => __( 'Choose when to split the cart into multiple carts (and orders).', 'bbloomer-woocommerce-split-cart-into-packages' ),
 			'type' => 'select',
-			'id' => bbwscip_settings_option_name_when_split(),
+			'id' => bbwcscip_settings_option_name_when_split(),
 			'class' => 'wc-enhanced-select',
 			'default' => 'cart',
-			'options' => bbwscip_when_split_options(),
+			'options' => bbwcscip_when_split_options(),
 			'autoload' => false,
 		],
 
@@ -306,24 +306,24 @@ add_filter('woocommerce_get_settings_bb', function( $settings, $current_section 
 			'title'    => 'Split criteria',
 			'desc'     => __( 'Choose what criteria to use to split the cart into multiple carts.', 'bbloomer-woocommerce-split-cart-into-packages' ),
 			'type'     => 'select',
-			'id'       => bbwscip_settings_option_name_split_criteria(),
+			'id'       => bbwcscip_settings_option_name_split_criteria(),
 			'class'    => 'wc-enhanced-select',
 			'default'  => 'class',
-			'options'  => bbwscip_split_criteria_options(),
+			'options'  => bbwcscip_split_criteria_options(),
 			'autoload' => false,
 		],
-		['type' => 'sectionend', 'id' => 'bbwscip_custom_settings_end'],
+		['type' => 'sectionend', 'id' => 'bbwcscip_custom_settings_end'],
 	];
 	return array_merge( $settings, $new_settings );
 }, 9999, 2 );
 
-add_action( 'woocommerce_admin_field_bbwscip_html_wrapper', function( $value ) {
+add_action( 'woocommerce_admin_field_bbwcscip_html_wrapper', function( $value ) {
 	echo wp_kses_post( $value['content'] );
 }, 10, 1);
 
-function bbwscip_custom_settings_start() {
+function bbwcscip_custom_settings_start() {
 	$plugin_data = get_plugin_data( WP_PLUGIN_DIR . '/' . plugin_basename(__FILE__) );
-	$quick_links = bbwscip_action_links( [], '', $plugin_data, '' );
+	$quick_links = bbwcscip_action_links( [], '', $plugin_data, '' );
 	array_shift( $quick_links );
-	return '<h1 id="bbwscip">' . $plugin_data['Name'] . ' <small>v ' . $plugin_data['Version'] . '</small></h1><p>' . $plugin_data['Description'] . '</p><h4>Quick links: ' . implode(' - ', $quick_links) . '</h4>';
+	return '<h1 id="bbwcscip">' . $plugin_data['Name'] . ' <small>v ' . $plugin_data['Version'] . '</small></h1><p>' . $plugin_data['Description'] . '</p><h4>Quick links: ' . implode(' - ', $quick_links) . '</h4>';
 }
