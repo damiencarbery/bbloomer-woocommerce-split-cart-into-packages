@@ -203,6 +203,115 @@ function bbwcscip_split_packages_at_cart( $packages ) {
 	return $packages;
 }
 
+// Store the package ID with the order item so that it can be retrieved later.
+add_action( 'woocommerce_checkout_create_order_line_item', 'bbwcscip_save_package_id_to_order_items', 10, 4 );
+function bbwcscip_save_package_id_to_order_items( $item, $cart_item_key, $values, $order ) {
+	$packages = WC()->shipping()->get_packages();
+	if ( is_array( $packages ) ) {
+		foreach ( $packages as $package_id => $package ) {
+			if ( isset( $package['contents'][ $cart_item_key ] ) ) {
+				$item->add_meta_data( '_package_id', $package_id, true );
+			}
+		}
+	}
+}
+
+// Store the package name/id/label with the shipping item.
+add_action( 'woocommerce_checkout_create_order_shipping_item', 'bbwcscip_save_shipping_method_package_id', 10, 4 );
+function bbwcscip_save_shipping_method_package_id( $shipping_item, $package_key, $package, $order ) {
+	if ( has_filter( 'woocommerce_shipping_package_name' ) ) {
+		$custom_name = apply_filters( 'woocommerce_shipping_package_name', '', $package_key, $package );
+	} else {
+		$custom_name = sprintf( __( 'Package %d', 'woocommerce' ), $package_key + 1 );
+	}
+
+	$shipping_item->add_meta_data( '_package_name', $custom_name, true );
+	$shipping_item->add_meta_data( '_package_id', $package_key, true );
+	$shipping_item->add_meta_data( '_package_label', $shipping_item->get_name(), true );
+}
+
+// Display the package id/name/label on the View Order page and in order emails.
+add_action( 'woocommerce_order_details_after_order_table', 'bbwcscip_display_order_packages_full', 10 );
+add_action( 'woocommerce_email_after_order_table', 'bbwcscip_display_order_packages_full', 10 );
+function bbwcscip_display_order_packages_full( $order ) {
+	
+	if ( ! is_a( $order, 'WC_Order' ) ) return;
+	
+	$items_by_package = [];
+	$shipping_by_package = [];
+
+	// Group items by package
+	foreach ( $order->get_items() as $item_id => $item ) {
+		$package_id = $item->get_meta( '_package_id', true );
+		if ( $package_id === '' ) $package_id = 0; // fallback
+		$items_by_package[ $package_id ][ $item_id ] = $item;
+	}
+
+	// Get shipping methods by package
+	foreach ( $order->get_items( 'shipping' ) as $shipping_item_id => $shipping_item ) {
+		$package_id = $shipping_item->get_meta( '_package_id', true );
+		$package_name = $shipping_item->get_meta( '_package_name', true );
+		$method_label = $shipping_item->get_meta( '_package_label', true );
+		if ( $package_id !== '' ) {
+			$shipping_by_package[ $package_id ] = [ $method_label, $package_name ];
+		}
+	}
+
+	// Bail if nothing to show
+	if ( empty( $items_by_package ) ) return;
+
+	// If running the order email action then add some CSS for the ul element.
+	$ul_css = '';
+	if ( 'woocommerce_email_after_order_table' == current_action() ) {
+		$ul_css = 'style="list-style-type: none; padding-left: 0;"';
+	}
+	echo '<h2>' . __( 'Shipping Packages', 'woocommerce' ) . '</h2>';
+	
+	echo '<ul class="products wc-block-product-template__responsive columns-3" ', $ul_css, ' >';
+
+	foreach ( $items_by_package as $package_id => $items ) {
+		
+		echo '<li class="product" style="border: 1px solid #ccc; padding: 0.5em; text-align: left; width: 31%; float: left; margin-bottom: 1em; margin-right: 2%;">';
+		
+		if ( isset( $shipping_by_package[ $package_id ] ) ) {
+			echo '<p><span class="dashicons dashicons-open-folder"></span><strong>' . esc_html( $shipping_by_package[ $package_id ][1] ) . '</strong></p>';
+			echo '<p>' . __( 'Shipping Method', 'woocommerce' ) . ': ' . esc_html( $shipping_by_package[ $package_id ][0] ) . '</p>';
+		}
+
+		echo '<ul>';
+		foreach ( $items as $item ) {
+			echo '<li>' . $item->get_name() . ' × ' . $item->get_quantity() . '</li>';
+		}
+		echo '</ul>';
+		
+		echo '</li>';
+		
+	}
+	
+	echo '</ul>';
+	
+}
+
+// Change order meta keys into readable text.
+add_filter( 'woocommerce_order_item_get_formatted_meta_data', 'bbwcscip_readable_order_meta_display_key', 10, 2 );
+function bbwcscip_readable_order_meta_display_key( $formatted_meta, $order_obj ) {
+	error_log( 'DEBUG: bbwcscip_readable_order_meta_display_key: $formatted_meta: ' . var_export( $formatted_meta, true ) );
+	
+	$readable_package_meta = array(
+		'_package_id'    => __( 'Package ID', 'bbloomer-woocommerce-split-cart-into-packages' ),
+		'_package_name'  => __( 'Package name', 'bbloomer-woocommerce-split-cart-into-packages' ),
+		'_package_label' => __( 'Package label', 'bbloomer-woocommerce-split-cart-into-packages' ),
+	);
+	
+	foreach ( $formatted_meta as &$meta_item ) {
+		if ( array_key_exists( $meta_item->key, $readable_package_meta ) ) {
+			$meta_item->display_key = $readable_package_meta[ $meta_item->key ];
+		}
+	}
+
+	return $formatted_meta;
+}
+
 // Change package name to include the shipping class or product category name.
 function bbwcscip_package_name( $package_name, $i, $package ) {
 	$split_by = get_option( bbwcscip_settings_option_name_split_criteria(), 'class' );
