@@ -79,6 +79,9 @@ function bbwcscip_settings_option_name_when_split() {
 function bbwcscip_settings_option_name_split_criteria() {
 	return 'bb_wscip_sc';
 }
+function bbwcscip_show_packages_option() {
+	return 'bb_wscip_sp';
+}
 
 // Return the possible options for when to split the order.
 function bbwcscip_when_split_options() {
@@ -109,6 +112,12 @@ function bbwcscip_set_split_hook() {
 	// Allow add-ons disable cart split in favour of their own timing e.g. add_filter( 'bbwcscip_split_in_cart', '__return_false' );
 	if ( 'cart' == get_option( bbwcscip_settings_option_name_when_split(), 'cart' ) ) {
 		add_filter( 'woocommerce_cart_shipping_packages', 'bbwcscip_split_packages_at_cart' );
+	}
+
+	// Display the package id/name/label on the View Order page and in order emails.
+	if ( 'yes' == get_option( bbwcscip_show_packages_option(), 'no' ) ) {
+		add_action( 'woocommerce_order_details_after_order_table', 'bbwcscip_display_order_packages_full', 10 );
+		add_action( 'woocommerce_email_after_order_table', 'bbwcscip_display_order_packages_full', 10 );
 	}
 }
 
@@ -231,8 +240,6 @@ function bbwcscip_save_shipping_method_package_id( $shipping_item, $package_key,
 }
 
 // Display the package id/name/label on the View Order page and in order emails.
-add_action( 'woocommerce_order_details_after_order_table', 'bbwcscip_display_order_packages_full', 10 );
-add_action( 'woocommerce_email_after_order_table', 'bbwcscip_display_order_packages_full', 10 );
 function bbwcscip_display_order_packages_full( $order ) {
 	
 	if ( ! is_a( $order, 'WC_Order' ) ) return;
@@ -295,7 +302,7 @@ function bbwcscip_display_order_packages_full( $order ) {
 // Change order meta keys into readable text.
 add_filter( 'woocommerce_order_item_get_formatted_meta_data', 'bbwcscip_readable_order_meta_display_key', 10, 2 );
 function bbwcscip_readable_order_meta_display_key( $formatted_meta, $order_obj ) {
-	error_log( 'DEBUG: bbwcscip_readable_order_meta_display_key: $formatted_meta: ' . var_export( $formatted_meta, true ) );
+//error_log( 'DEBUG: bbwcscip_readable_order_meta_display_key: $formatted_meta: ' . var_export( $formatted_meta, true ) );
 	
 	$readable_package_meta = array(
 		'_package_id'    => __( 'Package ID', 'bbloomer-woocommerce-split-cart-into-packages' ),
@@ -410,7 +417,6 @@ add_filter('woocommerce_get_settings_bb', function( $settings, $current_section 
 			'options' => bbwcscip_when_split_options(),
 			'autoload' => false,
 		],
-
 		[
 			'title'    => 'Split criteria',
 			'desc'     => __( 'Choose what criteria to use to split the cart into multiple carts.', 'bbloomer-woocommerce-split-cart-into-packages' ),
@@ -420,6 +426,13 @@ add_filter('woocommerce_get_settings_bb', function( $settings, $current_section 
 			'default'  => 'class',
 			'options'  => bbwcscip_split_criteria_options(),
 			'autoload' => false,
+		],
+		[
+			'title' => __( 'Show packages after checkout?', 'bbloomer-woocommerce-split-cart-into-packages' ),
+			'desc' => __( 'Whether to show the shipping packages on the Thank You page, My Account/View Order page and the order emails.', 'bbloomer-woocommerce-split-cart-into-packages' ),
+			'type' => 'checkbox',
+			'id' => bbwcscip_show_packages_option(),
+			'default' => 'no',
 		],
 		['type' => 'sectionend', 'id' => 'bbwcscip_custom_settings_end'],
 	];
