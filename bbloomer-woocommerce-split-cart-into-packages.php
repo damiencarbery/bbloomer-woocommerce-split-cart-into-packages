@@ -9,7 +9,7 @@
  * Author URI: https://www.businessbloomer.com
  * Text Domain: bbloomer-woocommerce-split-cart-into-packages
  * Requires Plugins: woocommerce
- * Version: 0.2.20250601
+ * Version: 0.3.20250602
  */
 
 defined( 'ABSPATH' ) || exit;
